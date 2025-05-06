@@ -1,7 +1,5 @@
 package io.mosip.packet.core.constant.tracker;
 
-import io.mosip.packet.core.constant.DBTypes;
-
 public enum StringType {
     MSSQL("VARCHAR"),
     ORACLE("VARCHAR2"),

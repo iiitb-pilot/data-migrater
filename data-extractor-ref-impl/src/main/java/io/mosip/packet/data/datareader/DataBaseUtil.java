@@ -6,6 +6,7 @@ import io.mosip.kernel.core.logger.spi.Logger;
 import io.mosip.packet.core.config.activity.Activity;
 import io.mosip.packet.core.constant.*;
 import io.mosip.packet.core.constant.activity.ActivityName;
+import io.mosip.packet.core.constant.database.DBTypes;
 import io.mosip.packet.core.constant.database.QueryLimitSetter;
 import io.mosip.packet.core.constant.database.QueryOffsetLimitSetter;
 import io.mosip.packet.core.dto.dbimport.*;
@@ -85,7 +86,7 @@ public class DataBaseUtil implements DataReader {
                 dbType = dbImportRequest.getDbType();
                 Class driverClass = Class.forName(dbType.getDriver());
                 DriverManager.registerDriver((Driver) driverClass.newInstance());
-                String connectionHost = String.format(dbType.getDriverUrl(), dbImportRequest.getUrl(), dbImportRequest.getPort(), dbImportRequest.getDatabaseName());
+                String connectionHost = String.format(dbType.getDriverUrl(dbImportRequest.getDbDriverFormat()), dbImportRequest.getUrl(), dbImportRequest.getPort(), dbImportRequest.getDatabaseName());
                 conn = DriverManager.getConnection(connectionHost, dbImportRequest.getUserId(), dbImportRequest.getPassword());
 
                 isTrackerSameHost = trackerUtil.isTrackerHostSame(connectionHost, dbImportRequest.getDatabaseName());

@@ -2,7 +2,8 @@ package io.mosip.packet.data.qualityscore.writer;
 
 import io.mosip.kernel.core.exception.ExceptionUtils;
 import io.mosip.kernel.core.logger.spi.Logger;
-import io.mosip.packet.core.constant.DBTypes;
+import io.mosip.packet.core.constant.database.DBDriverType;
+import io.mosip.packet.core.constant.database.DBTypes;
 import io.mosip.packet.core.constant.tracker.NumberType;
 import io.mosip.packet.core.constant.tracker.StringType;
 import io.mosip.packet.core.constant.tracker.TimeStampType;
@@ -70,7 +71,8 @@ public class TableWriter implements QualityWriterFactory {
 
                 Class driverClass = Class.forName(dbType.getDriver());
                 DriverManager.registerDriver((Driver) driverClass.newInstance());
-                connectionHost = String.format(dbType.getDriverUrl(), env.getProperty("spring.datasource.tracker.host"), env.getProperty("spring.datasource.tracker.port"), env.getProperty("spring.datasource.tracker.database"));
+                DBDriverType dbDriverType = DBDriverType.valueOf(env.getProperty("spring.datasource.tracker.driver.format"));
+                connectionHost = String.format(dbType.getDriverUrl(dbDriverType), env.getProperty("spring.datasource.tracker.host"), env.getProperty("spring.datasource.tracker.port"), env.getProperty("spring.datasource.tracker.database"));
                 conn = DriverManager.getConnection(connectionHost, env.getProperty("spring.datasource.tracker.username"), env.getProperty("spring.datasource.tracker.password"));
                 conn.setAutoCommit(true);
 

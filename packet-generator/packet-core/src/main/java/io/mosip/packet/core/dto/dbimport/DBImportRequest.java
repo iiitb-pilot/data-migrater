@@ -1,6 +1,7 @@
 package io.mosip.packet.core.dto.dbimport;
 
-import io.mosip.packet.core.constant.DBTypes;
+import io.mosip.packet.core.constant.database.DBDriverType;
+import io.mosip.packet.core.constant.database.DBTypes;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
@@ -15,6 +16,7 @@ public class DBImportRequest {
     private String url;
     private String port;
     private String databaseName;
+    private DBDriverType dbDriverFormat;
     private String userId;
     private String password;
     private List<TableRequestDto> tableDetails;

@@ -1,6 +1,6 @@
 package io.mosip.packet.data.qualityscore.writer.constant;
 
-import io.mosip.packet.core.constant.DBTypes;
+import io.mosip.packet.core.constant.database.DBTypes;
 import lombok.Getter;
 import org.springframework.stereotype.Component;
 

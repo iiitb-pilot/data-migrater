@@ -1,5 +1,6 @@
 package io.mosip.packet.core.constant;
 
+import io.mosip.packet.core.constant.database.DBTypes;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
