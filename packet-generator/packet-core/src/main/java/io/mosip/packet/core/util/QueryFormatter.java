@@ -18,19 +18,42 @@ public class QueryFormatter {
                     String columnText = query.substring(startIndex, endIndex+1).replace("${", "").replace("}", "");
                     FieldCategory category = FieldCategory.valueOf(columnText.split(":")[0]);
                     String column = columnText.split(":")[1];
+                    String type = columnText.split(":")[2];
 
+                    validateType(type);
                     Object val = dataMap.get(category).get(column);
 
                     if (val == null)
                         throw  new Exception("Missing Value in " + category.toString() + "category for the column " + column);
 
-                    query = query.replace("'${" + columnText + "}'", String.valueOf("'" + val +"'"));
-                    query = query.replace("${" + columnText + "}", String.valueOf("'" + val +"'"));
+                    String fval = formatValueBasedOnType(type, val);
+                    query = query.replace("'${" + columnText + "}'",  fval );
+                    query = query.replace("${" + columnText + "}", fval);
                 }
             } while(query.contains("${"));
         }
 
         return query;
+    }
+
+    private void validateType(String type) throws Exception {
+        switch (type) {
+            case "STRING":
+                break;
+            case "NUMBER":
+                break;
+            default:
+                throw  new Exception("Invalid Value Type " + type);
+        }
+    }
+
+    private String formatValueBasedOnType(String type, Object val) {
+        switch (type) {
+            case "NUMBER":
+                return String.valueOf(val);
+            default:
+                return String.valueOf("'" + val +"'");
+        }
     }
 
     public String queryFormatter(String query, Map<String, String> map) {
