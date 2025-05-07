@@ -3,6 +3,7 @@ package io.mosip.packet.core.util;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.mosip.kernel.core.idgenerator.spi.RidGenerator;
+import io.mosip.kernel.core.logger.spi.Logger;
 import io.mosip.packet.core.constant.ApiName;
 import io.mosip.packet.core.constant.DataFormat;
 import io.mosip.packet.core.constant.FieldCategory;
@@ -12,6 +13,7 @@ import io.mosip.packet.core.dto.dbimport.FieldFormatRequest;
 import io.mosip.packet.core.dto.dbimport.FieldName;
 import io.mosip.packet.core.dto.dbimport.TableRequestDto;
 import io.mosip.packet.core.exception.ApisResourceAccessException;
+import io.mosip.packet.core.logger.DataProcessLogger;
 import io.mosip.packet.core.service.DataRestClientService;
 import lombok.Getter;
 import org.apache.commons.io.IOUtils;
@@ -27,7 +29,13 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.time.Period;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ValueRange;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Component
 public class CommonUtil {
@@ -46,6 +54,9 @@ public class CommonUtil {
     @Value("${mosip.extractor.common.bio.default.formats:JP2,ISO}")
     private String defaultBioConvertFormat;
 
+    @Value("${mosip.regproc.packet.classifier.tagging.agegroup.ranges}")
+    private String ageGroupConfig;
+
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @Getter
@@ -55,6 +66,13 @@ public class CommonUtil {
     private List<String> nonIdSchemaFieldsMap;
 
     private String REFERENCE_ID = "COMMON_UTIL";
+
+    private final String APPLICANT_DOB_SUBTYPE = "dateOfBirth";
+
+    private Map<String, Object> columnConfig;
+
+    private static final Logger LOGGER = DataProcessLogger.getLogger(CommonUtil.class);
+
 
     public synchronized String generateRegistrationId(String centerId, String machineId) {
         return (String) ridGenerator.generateId(centerId, machineId);
@@ -68,6 +86,13 @@ public class CommonUtil {
         updateFieldCategory(dbImportRequest);
         updateBioDestFormat(dbImportRequest);
         updateNonIdSchemaNonTableFields(dbImportRequest);
+        setColumnConfiguration(dbImportRequest);
+    }
+
+    private void setColumnConfiguration(DBImportRequest dbImportRequest) {
+        List<FieldFormatRequest> list = dbImportRequest.getColumnDetails();
+        Map<String, Object> map = list.parallelStream().collect(Collectors.toMap(FieldFormatRequest::getFieldToMap, fieldFormatRequest -> fieldFormatRequest));
+        this.columnConfig = map;
     }
 
     public HashMap<String, Object> getLatestIdSchema() throws ApisResourceAccessException, IOException, ParseException {
@@ -198,5 +223,62 @@ public class CommonUtil {
             }
         }
         return present;
+    }
+
+    public Map<String, Object> getAgeGroup(HashMap<String, Object> demoDetails) throws Exception {
+        org.json.JSONObject ageGroupJson = new org.json.JSONObject(ageGroupConfig);
+        Map<String, Object> AGE_GROUPS = new HashMap<>();
+
+        Path identityFile = Paths.get(System.getProperty("user.dir"), "identity.json");
+
+        if (identityFile.toFile().exists()) {
+            JSONParser parser = new JSONParser();
+            JSONObject jsonObject = (JSONObject) parser.parse(IOUtils.toString(new FileInputStream(identityFile.toFile()), StandardCharsets.UTF_8));
+            JSONObject identityJsonObject = (JSONObject) jsonObject.get("identity");
+            String dob = (String) ((JSONObject) identityJsonObject.get("dob")).get("value");
+            String crdt = (String) ((JSONObject) identityJsonObject.get("crdt")).get("value");
+
+            if(dob == null || crdt == null)
+                throw new Exception("Missing Attributes for dob or crdt in identity.json");
+
+            FieldFormatRequest dobFieldFormatRequest = (FieldFormatRequest) columnConfig.get(dob);
+            FieldFormatRequest crdFieldFormatRequest = (FieldFormatRequest) columnConfig.get(crdt);
+
+            if(dobFieldFormatRequest == null)
+                throw new Exception("Missing Column Configuration in ApiRequest.json for the attribute " + dob + " and " + crdt);
+
+            LocalDate dateOfBirth = demoDetails.get(dob) != null ? convertStringToLocalDate((String) demoDetails.get(dob), dobFieldFormatRequest.getDestFormat().get(dobFieldFormatRequest.getDestFormat().size()-1).getFormat()) : null;
+            LocalDate creationDate = demoDetails.get(crdt) != null ? convertStringToLocalDate((String) demoDetails.get(crdt), crdFieldFormatRequest.getDestFormat().get(crdFieldFormatRequest.getDestFormat().size()-1).getFormat()) : null;
+
+            if(creationDate == null) {
+                LOGGER.warn("Missing Column Configuration in ApiRequest.json for the attribute " + crdt + ". So Consider current system date as Creation Date");
+                creationDate = LocalDate.now(ZoneId.of("UTC"));
+            }
+
+            LocalDate finalCreationDate = creationDate;
+
+            if(dateOfBirth != null && finalCreationDate != null) {
+                ageGroupJson.keySet().forEach(group -> {
+                    String[] range = ageGroupJson.getString(group).split("-");
+
+                    int ageInYears = Period.between(dateOfBirth, finalCreationDate).getYears();
+                    if(ValueRange.of(Long.valueOf(range[0]), Long.valueOf(range[1])).isValidIntValue(ageInYears)) {
+                        if(APPLICANT_DOB_SUBTYPE.equals(dob)) {
+                            AGE_GROUPS.put("ageGroup", group);
+                            AGE_GROUPS.put("age", ageInYears);
+                        }
+                    }
+                });
+            }
+
+        } else {
+            throw new Exception("Identity Mapping JSON File (identity.json) missing");
+        }
+        return AGE_GROUPS;
+    }
+
+    public static LocalDate convertStringToLocalDate(String dateString, String pattern) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
+        return LocalDate.parse(dateString, formatter);
     }
 }

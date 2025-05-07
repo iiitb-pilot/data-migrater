@@ -42,11 +42,8 @@ public class FieldFormatRequest {
             String[] fields = fieldName.split(",");
             fieldList = new ArrayList<>();
 
-            if (fieldCategory != null && fieldCategory.equals(FieldCategory.DOC)) {
+            if (fieldCategory != null && fieldCategory.equals(FieldCategory.DOC))
                 prefix = fieldToMap;
-             } else {
-                throw new Exception("Field Category not Configured for the field name :  " + fieldName);
-            }
 
             for(int i = 0; i < fields.length; i++) {
                 String field = fields[i];

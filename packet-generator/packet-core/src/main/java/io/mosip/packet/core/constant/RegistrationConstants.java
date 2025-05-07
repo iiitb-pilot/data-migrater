@@ -1213,8 +1213,7 @@ public class RegistrationConstants {
 	public static final String BIOVALUE_PLACEHOLDER = "\"<bioValue>\"";
 	
 	public static final String AUDIT_TIMESTAMP = "mosip.registration.audit_timestamp";
-	public static final String AGE_GROUP_CONFIG = "mosip.regproc.packet.classifier.tagging.agegroup.ranges";
-	
+
 	public static final String LOGOUT = "Logout";
 	public static final String ROLES_MODIFIED = "Roles Modified";
 

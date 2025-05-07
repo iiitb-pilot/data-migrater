@@ -71,7 +71,8 @@ public class TableWriter implements QualityWriterFactory {
 
                 Class driverClass = Class.forName(dbType.getDriver());
                 DriverManager.registerDriver((Driver) driverClass.newInstance());
-                DBDriverType dbDriverType = DBDriverType.valueOf(env.getProperty("spring.datasource.tracker.driver.format"));
+                String driverFormat = env.getProperty("spring.datasource.tracker.driver.format");
+                DBDriverType dbDriverType = DBDriverType.valueOf(driverFormat == null ? DBDriverType.DEFAULT.toString() : driverFormat);
                 connectionHost = String.format(dbType.getDriverUrl(dbDriverType), env.getProperty("spring.datasource.tracker.host"), env.getProperty("spring.datasource.tracker.port"), env.getProperty("spring.datasource.tracker.database"));
                 conn = DriverManager.getConnection(connectionHost, env.getProperty("spring.datasource.tracker.username"), env.getProperty("spring.datasource.tracker.password"));
                 conn.setAutoCommit(true);

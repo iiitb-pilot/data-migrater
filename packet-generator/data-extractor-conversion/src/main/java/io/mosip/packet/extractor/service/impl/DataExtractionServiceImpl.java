@@ -192,6 +192,7 @@ public class DataExtractionServiceImpl implements DataExtractionService {
             enumList.add(ValidatorEnum.ID_SCHEMA_VALIDATOR);
             enumList.add(ValidatorEnum.FILTER_VALIDATOR);
             enumList.add(ValidatorEnum.BIOMETRIC_FORMAT_VALIDATOR);
+            enumList.add(ValidatorEnum.IDENTITY_JSON_VALIDATOR);
 
             mockDeviceUtil.resetDevices();
             mockDeviceUtil.initDeviceHelpers();

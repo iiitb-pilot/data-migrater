@@ -111,6 +111,9 @@ public class PacketCreator {
     @Value("${mosip.packet.creator.enable.biometric.digital.signature:true}")
     private boolean isDigitalSignatureRequired;
 
+    @Value("#{${mosip.packet.creator.biometric-modalities-segments-mapping-for-age-group}}")
+    private Map<String, Map<String, List<String>>> biometricModalitySegmentsMapforAgeGroup;
+
     @Autowired
     private MosipDeviceSpecificationHelper mosipDeviceSpecificationHelper;
 
@@ -246,7 +249,7 @@ public class PacketCreator {
         return docMap;
     }
 
-    public LinkedHashMap<String, BiometricRecord> setBiometrics(HashMap<String, Object> bioDetails, HashMap<String, String> metaInfoMap, HashMap<String, String> csvMap, String trackerColumn, Long startTime) throws Exception {
+    public LinkedHashMap<String, BiometricRecord> setBiometrics(HashMap<String, Object> bioDetails, HashMap<String, String> metaInfoMap, HashMap<String, String> csvMap, String trackerColumn, Long startTime, Object ageGroup) throws Exception {
         HashMap<String, Object> idSchema = commonUtil.getLatestIdSchema();
         LOGGER.debug("Adding Biometrics to packet manager started..");
         HashMap<String, List<BIR>> capturedBiometrics = new HashMap<>();
@@ -255,6 +258,18 @@ public class PacketCreator {
         Map<String, DeviceMetaInfo> capturedRegisteredDevices = new HashMap<>();
 
         LinkedHashMap<String, BiometricRecord> biometricsMap = new LinkedHashMap<>();
+
+        Map<String, List<String>> ageGroupModalitySegmentMap;
+        if(ageGroup != null && biometricModalitySegmentsMapforAgeGroup.containsKey(ageGroup)){
+            ageGroupModalitySegmentMap = biometricModalitySegmentsMapforAgeGroup.get(ageGroup);
+        }
+        else {
+            ageGroupModalitySegmentMap = biometricModalitySegmentsMapforAgeGroup.get("DEFAULT");
+        }
+
+        List<String> bioAttributesConf = new ArrayList<>();
+        for(List<String> list : ageGroupModalitySegmentMap.values())
+            bioAttributesConf.addAll(list);
 
         for(Object obj : (List)idSchema.get("schema")) {
             Map<String, Object> map = (Map<String, Object>) obj;
@@ -266,6 +281,7 @@ public class PacketCreator {
             if (type.equals("biometricsType")) {
                 List<String> bioAttributes = new ArrayList<String>();
                 bioAttributes.addAll((List<String>) map.get("bioAttributes"));
+                bioAttributes.retainAll(bioAttributesConf);
                 Integer attributeCount = bioAttributes.size();
                 bioAttributes.add("unknown");
 

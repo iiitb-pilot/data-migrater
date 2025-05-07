@@ -8,6 +8,12 @@
     },
     "email" : {
       "value" : "email"
+    },
+    "dob" : {
+      "value" : "dateOfBirth"
+    },
+    "crdt" : {
+      "value" : "createdDt"
     }
   }
 }

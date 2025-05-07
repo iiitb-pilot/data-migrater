@@ -114,7 +114,8 @@ public class MosipPacketDTOProcessor implements DataProcessor {
 
                     if (bioDetails.size() > 0) {
                         LOGGER.debug("SESSION_ID", "DATA_PROCESSOR", "process()", "Reference Id : " + refId + " Biometrics found size is  : " + bioDetails.size());
-                        packetDto.setBiometrics(packetCreator.setBiometrics(bioDetails, metaInfo, csvMap, refId, startTime));
+                        Map<String, Object> ageGroup = commonUtil.getAgeGroup(demoDetails);
+                        packetDto.setBiometrics(packetCreator.setBiometrics(bioDetails, metaInfo, csvMap, refId, startTime, (ageGroup.isEmpty() ? null : ageGroup.get("ageGroup"))));
                     }
 
                     timeDifference = System.nanoTime()-startTime;

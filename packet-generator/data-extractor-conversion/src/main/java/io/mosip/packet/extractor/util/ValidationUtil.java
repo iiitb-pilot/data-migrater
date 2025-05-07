@@ -3,10 +3,7 @@ package io.mosip.packet.extractor.util;
 import io.mosip.packet.core.constant.ValidatorEnum;
 import io.mosip.packet.core.dto.dbimport.DBImportRequest;
 import io.mosip.packet.extractor.validator.Validator;
-import io.mosip.packet.extractor.validator.impl.BiometricFormatValidator;
-import io.mosip.packet.extractor.validator.impl.FilterValidation;
-import io.mosip.packet.extractor.validator.impl.IdSchemaFieldValidator;
-import io.mosip.packet.extractor.validator.impl.OrderByValidator;
+import io.mosip.packet.extractor.validator.impl.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Component;
@@ -30,6 +27,9 @@ public class ValidationUtil {
     @Autowired
     private BiometricFormatValidator biometricFormatValidator;
 
+    @Autowired
+    private IdentityObjectValidator identityObjectValidator;
+
     private HashMap<ValidatorEnum, Validator> validatorList = null;
 
     public HashMap<ValidatorEnum, Validator> getValidatorMap() {
@@ -39,6 +39,7 @@ public class ValidationUtil {
             validatorList.put(ValidatorEnum.FILTER_VALIDATOR, filterValidation);
             validatorList.put(ValidatorEnum.ORDERBY_VALIDATOR, orderByValidator);
             validatorList.put(ValidatorEnum.BIOMETRIC_FORMAT_VALIDATOR, biometricFormatValidator);
+            validatorList.put(ValidatorEnum.IDENTITY_JSON_VALIDATOR, identityObjectValidator);
         }
         return validatorList;
     }

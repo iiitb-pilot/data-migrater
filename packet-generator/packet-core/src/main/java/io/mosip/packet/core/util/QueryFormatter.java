@@ -16,9 +16,10 @@ public class QueryFormatter {
 
                 if (endIndex > 0) {
                     String columnText = query.substring(startIndex, endIndex+1).replace("${", "").replace("}", "");
-                    FieldCategory category = FieldCategory.valueOf(columnText.split(":")[0]);
-                    String column = columnText.split(":")[1];
-                    String type = columnText.split(":")[2];
+                    String[] columnVal = columnText.split(":");
+                    FieldCategory category = FieldCategory.valueOf(columnVal[0]);
+                    String column = columnVal[1];
+                    String type = columnVal.length > 2 ? columnVal[2] : "STRING";
 
                     validateType(type);
                     Object val = dataMap.get(category).get(column);
