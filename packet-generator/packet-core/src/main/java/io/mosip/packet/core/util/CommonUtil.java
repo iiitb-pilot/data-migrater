@@ -82,7 +82,7 @@ public class CommonUtil {
         return val.substring(val.indexOf(":")+1).trim();
     }
 
-    public void initialize(DBImportRequest dbImportRequest) throws ApisResourceAccessException, IOException, ParseException {
+    public void initialize(DBImportRequest dbImportRequest) throws Exception {
         updateFieldCategory(dbImportRequest);
         updateBioDestFormat(dbImportRequest);
         updateNonIdSchemaNonTableFields(dbImportRequest);
@@ -114,9 +114,12 @@ public class CommonUtil {
         return latestIdSchemaMap;
     }
 
-    public void updateFieldCategory(DBImportRequest dbImportRequest) throws ApisResourceAccessException, IOException, ParseException {
+    public void updateFieldCategory(DBImportRequest dbImportRequest) throws Exception {
         HashMap<String, Object> idSchema = getLatestIdSchema();
         HashMap<String, FieldCategory> fieldMap = new HashMap<>();
+
+        if(idSchema == null ||  idSchema.get("schema") == null)
+            throw new Exception("UI Spec (Schema) missing in latest idschema mapping");
 
         for(Object obj : (List)idSchema.get("schema")) {
             Map<String, Object> map = (Map<String, Object>) obj;

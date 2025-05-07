@@ -334,6 +334,7 @@ public class DataExtractionServiceImpl implements DataExtractionService {
             System.out.println("End Time Time " + new Date());
         } catch (Exception e) {
           e.printStackTrace();
+          LOGGER.error("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Error " + e.getMessage() + "\n" + ExceptionUtils.getStackTrace(e));
         } finally {
             dataReaderApiFactory.disconnectDataReader();
             if(!IS_ONLY_FOR_QUALITY_CHECK)
