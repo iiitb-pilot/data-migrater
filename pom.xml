@@ -15,7 +15,7 @@
 	</parent>
 	<groupId>io.mosip.packet</groupId>
 	<artifactId>data-migrator</artifactId>
-	<version>1.2.0.1-SNAPSHOT</version>
+	<version>1.2.0.1</version>
 	<name>data-migrator</name>
 
 	<dependencies>
@@ -75,7 +75,7 @@
 		<dependency>
 			<groupId>io.mosip.kernel</groupId>
 			<artifactId>kernel-keymanager-service</artifactId>
-			<version>1.2.0.1-B2</version>
+			<version>1.2.0.1</version>
 			<classifier>lib</classifier>
 			<exclusions>
 				<exclusion>
