@@ -61,7 +61,7 @@ public class UgandaECExporter implements DataPostProcessor {
 
         PreparedStatement preparedStatement = conn.prepareStatement(preparedQuery);
         for(int i=0; i < fieldsToStore.size(); i++) {
-            preparedStatement.setObject(i, map.get(fieldsToStore.get(i)));
+            preparedStatement.setObject(i+1, map.get(fieldsToStore.get(i)));
         }
         preparedStatement.executeUpdate();
         return responseDto;
@@ -103,8 +103,8 @@ public class UgandaECExporter implements DataPostProcessor {
                 statement = conn.createStatement();
                 statement.execute("SELECT 1 FROM " + UG_TABLE_NAME + " LIMIT 1");
             } catch (Exception e) {
-                System.out.println("Table " + UG_TABLE_NAME +  " not Present in DB " + env.getProperty("spring.datasource.uganda.ec.host"));
-                throw new Exception("Table " + UG_TABLE_NAME +  " not Present in DB " + env.getProperty("spring.datasource.uganda.ec.host"));
+                System.out.println("Table " + UG_TABLE_NAME +  " not Present in DB " + env.getProperty("spring.datasource.uganda.ec.host") + ExceptionUtils.getStackTrace(e));
+                throw new Exception("Table " + UG_TABLE_NAME +  " not Present in DB " + env.getProperty("spring.datasource.uganda.ec.host") + ExceptionUtils.getStackTrace(e));
             } finally {
                 if(statement != null)
                     statement.close();

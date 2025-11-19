@@ -207,10 +207,10 @@ public class TableDataMapperUtil implements DataMapperUtil {
                         map =  dataMapperProcessor.processBioData(fieldFormatRequest, resultSet, byteVal, fieldToMap);
                     }
 
-                    HashMap<BioSubType, DataFormat> formatMap = new HashMap<>();
+                    HashMap<BioSubType, IndividualBiometricFormat> formatMap = new HashMap<>();
                     if(fieldFormatRequest.getIndividualBiometricFormat() != null && !fieldFormatRequest.getIndividualBiometricFormat().isEmpty()) {
                         for(IndividualBiometricFormat format : fieldFormatRequest.getIndividualBiometricFormat())
-                            formatMap.put(format.getSubType(), format.getImageFormat());
+                            formatMap.put(format.getSubType(), format);
                     }
 
                     for(String field : fieldToMap.split(",")) {
@@ -286,19 +286,28 @@ public class TableDataMapperUtil implements DataMapperUtil {
         return (byte[]) obj;
     }
 
-    public byte[] convertBiometric(String fileNamePrefix, FieldFormatRequest fieldFormatRequest, byte[] bioValue, Boolean localStoreRequired, String fieldName, HashMap<BioSubType, DataFormat> formatMap) throws Exception {
+    public byte[] convertBiometric(String fileNamePrefix, FieldFormatRequest fieldFormatRequest, byte[] bioValue, Boolean localStoreRequired, String fieldName, HashMap<BioSubType, IndividualBiometricFormat> formatMap) throws Exception {
         String bioSubType = fieldName.split("_")[1];
-        DataFormat sourFormat= null;
+        DataFormat srcFormat= fieldFormatRequest.getSrcFormat();
+        List<DataFormat> destFormat = fieldFormatRequest.getDestFormat();
 
         if(formatMap != null && !formatMap.isEmpty()) {
-            fieldFormatRequest.setSrcFormat(formatMap.get(BioSubType.getBioSubType(bioSubType)));
+            IndividualBiometricFormat format = formatMap.get(BioSubType.getBioSubType(bioSubType));
+
+            if(format != null) {
+                if(format.getSrcImageFormat() != null)
+                    srcFormat = format.getSrcImageFormat();
+
+                if(format.getDestImageFormat() != null && !format.getDestImageFormat().isEmpty())
+                    destFormat = format.getDestImageFormat();
+            }
         }
 
         if (localStoreRequired) {
-            bioConvertorApiFactory.writeFile(fileNamePrefix + "-" + fieldFormatRequest.getFieldList().get(0).getOriginalFieldName() , bioValue, fieldFormatRequest.getSrcFormat());
-            return bioConvertorApiFactory.writeFile(fileNamePrefix + "-" + fieldFormatRequest.getFieldList().get(0).getOriginalFieldName(), bioConvertorApiFactory.convertImage(fieldFormatRequest, bioValue, fieldName), fieldFormatRequest.getDestFormat().get(fieldFormatRequest.getDestFormat().size()-1));
+            bioConvertorApiFactory.writeFile(fileNamePrefix + "-" + fieldFormatRequest.getFieldList().get(0).getOriginalFieldName() , bioValue, srcFormat);
+            return bioConvertorApiFactory.writeFile(fileNamePrefix + "-" + fieldFormatRequest.getFieldList().get(0).getOriginalFieldName(), bioConvertorApiFactory.convertImage(srcFormat, destFormat, bioValue, fieldName), destFormat.get(destFormat.size()-1));
         } else {
-            return bioConvertorApiFactory.convertImage(fieldFormatRequest, bioValue, fieldName);
+            return bioConvertorApiFactory.convertImage(srcFormat, destFormat, bioValue, fieldName);
         }
     }
 }

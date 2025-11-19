@@ -6,6 +6,7 @@ import io.mosip.kernel.dataaccess.hibernate.config.HibernateDaoConfig;
 import io.mosip.kernel.dataaccess.hibernate.repository.impl.HibernateRepositoryImpl;
 import io.mosip.packet.core.config.activity.Activity;
 import io.mosip.packet.core.constant.GlobalConfig;
+import io.mosip.packet.core.constant.ProcessorConstant;
 import io.mosip.packet.core.constant.activity.ActivityName;
 import io.mosip.packet.core.dto.RequestWrapper;
 import io.mosip.packet.core.dto.dbimport.DBImportRequest;
@@ -55,7 +56,7 @@ public class DataProcessApplication {
             context.getBean(ConfigUtil.class).loadConfigDetails();
             GlobalConfig.setActivity(context.getBean(Activity.class).setActivity(null));
 
-            if(GlobalConfig.getApplicableActivityList().contains(ActivityName.DATA_REPROCESSOR))
+            if(GlobalConfig.getApplicableProcessorConstantList().contains(ProcessorConstant.DATA_REPROCESSOR))
                 context.getBean(DataReProcessorApiFactory.class).reProcess();
 
             if(internal) {

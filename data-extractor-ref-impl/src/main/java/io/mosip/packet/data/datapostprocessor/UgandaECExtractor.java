@@ -9,6 +9,7 @@ import io.mosip.packet.core.constant.FieldCategory;
 import io.mosip.packet.core.constant.tracker.TrackerStatus;
 import io.mosip.packet.core.dto.DataProcessorResponseDto;
 import io.mosip.packet.core.dto.dbimport.DBImportRequest;
+import io.mosip.packet.core.dto.packet.BioData;
 import io.mosip.packet.core.exception.ExceptionUtils;
 import io.mosip.packet.core.logger.DataProcessLogger;
 import io.mosip.packet.core.service.thread.ResultSetter;
@@ -16,6 +17,7 @@ import io.mosip.packet.core.spi.dataprocessor.DataProcessor;
 import io.mosip.packet.core.util.TrackerUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import java.util.*;
 
@@ -23,6 +25,7 @@ import static io.mosip.packet.core.constant.GlobalConfig.*;
 import static io.mosip.packet.core.constant.RegistrationConstants.APPLICATION_ID;
 import static io.mosip.packet.core.constant.RegistrationConstants.APPLICATION_NAME;
 
+@Component
 public class UgandaECExtractor implements DataProcessor {
 
     private static final Logger LOGGER = DataProcessLogger.getLogger(UgandaECExtractor.class);
@@ -92,8 +95,12 @@ public class UgandaECExtractor implements DataProcessor {
                     fieldName = entry.getKey();
                     JsonNode value = entry.getValue();
 
-                    // recursive call for nested elements
-                    response.put(fieldName, map.get(value.asText()));
+                    if(map.get(value.asText()) instanceof BioData) {
+                        BioData data = (BioData) map.get(value.asText());
+                        response.put(fieldName, data.getBioData());
+                    } else {
+                        response.put(fieldName, map.get(value.asText()));
+                    }
                 }
             }
 

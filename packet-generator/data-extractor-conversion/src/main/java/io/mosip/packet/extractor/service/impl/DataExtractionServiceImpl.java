@@ -247,7 +247,7 @@ public class DataExtractionServiceImpl implements DataExtractionService {
                     DataProcessorResponseDto processObject = dataProcessorApiFactory.process(dbImportRequest, dataHashMap, setter);
 
                     if(!IS_ONLY_FOR_QUALITY_CHECK) {
-                        if(GlobalConfig.getApplicableActivityList().contains(ActivityName.DATA_POST_PROCESSOR)) {
+                        if(GlobalConfig.getApplicableProcessorConstantList().contains(ProcessorConstant.DATA_POST_PROCESSOR)) {
                             DataPostProcessorResponseDto postProcessorResponseDto = dataPostProcessorApiFactory.postProcess(processObject, setter, startTime);
                         }
                     } else {
@@ -266,7 +266,7 @@ public class DataExtractionServiceImpl implements DataExtractionService {
                 }
             };
 
-            if(GlobalConfig.getApplicableActivityList().contains(ActivityName.DATA_EXPORTER)) {
+            if(GlobalConfig.getApplicableProcessorConstantList().contains(ProcessorConstant.DATA_EXPORTER)) {
                 Activity exportActivity = activity.getActivity(ActivityName.DATA_EXPORTER.name());
                 CustomizedThreadPoolExecutor uploadExector = new CustomizedThreadPoolExecutor(uploadMaxThreadPoolCount, uploadMaxRecordsCountPerThreadPool,uploadMaxThreadExecCount, exportActivity.getActivityName().getActivityName(), exportActivity.isMonitorRequired());
                 Timer uploaderTimer = new Timer("Uploading Packet");
@@ -445,9 +445,9 @@ public class DataExtractionServiceImpl implements DataExtractionService {
     public byte[] convertBiometric(String fileNamePrefix, FieldFormatRequest fieldFormatRequest, byte[] bioValue, Boolean localStoreRequired, String fieldName) throws Exception {
         if (localStoreRequired) {
             bioConvertorApiFactory.writeFile(fileNamePrefix + "-" + fieldFormatRequest.getFieldList().get(0).getOriginalFieldName() , bioValue, fieldFormatRequest.getSrcFormat());
-            return bioConvertorApiFactory.writeFile(fileNamePrefix + "-" + fieldFormatRequest.getFieldList().get(0).getOriginalFieldName(), bioConvertorApiFactory.convertImage(fieldFormatRequest, bioValue, fieldName), fieldFormatRequest.getDestFormat().get(fieldFormatRequest.getDestFormat().size()-1));
+            return bioConvertorApiFactory.writeFile(fileNamePrefix + "-" + fieldFormatRequest.getFieldList().get(0).getOriginalFieldName(), bioConvertorApiFactory.convertImage(fieldFormatRequest.getSrcFormat(), fieldFormatRequest.getDestFormat(), bioValue, fieldName), fieldFormatRequest.getDestFormat().get(fieldFormatRequest.getDestFormat().size()-1));
         } else {
-            return bioConvertorApiFactory.convertImage(fieldFormatRequest, bioValue, fieldName);
+            return bioConvertorApiFactory.convertImage(fieldFormatRequest.getSrcFormat(), fieldFormatRequest.getDestFormat(), bioValue, fieldName);
         }
     }
 

@@ -4,7 +4,6 @@ import io.mosip.commons.packet.constants.Biometric;
 import io.mosip.kernel.biometrics.constant.BiometricType;
 import io.mosip.packet.core.constant.BioSubType;
 import io.mosip.packet.core.constant.DataFormat;
-import io.mosip.packet.core.dto.dbimport.FieldFormatRequest;
 import io.mosip.packet.core.spi.BioConvertorApiFactory;
 import io.mosip.packet.data.convertion.util.BioUtilApplication;
 import org.jnbis.api.model.Bitmap;
@@ -25,11 +24,9 @@ public class BioConversion implements BioConvertorApiFactory {
     BioUtilApplication bioUtilApplication;
 
     @Override
-    public byte[] convertImage(FieldFormatRequest fieldFormatRequest, byte[] imageData, String fieldName) throws Exception {
+    public byte[] convertImage(DataFormat currentFormat, List<DataFormat> destFormats, byte[] imageData, String fieldName) throws Exception {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         byte[] byteData = imageData;
-        List<DataFormat> destFormats = fieldFormatRequest.getDestFormat();
-        DataFormat currentFormat = fieldFormatRequest.getSrcFormat();
 
         for(DataFormat toFormat : destFormats) {
             if(currentFormat.equals(toFormat)) {
