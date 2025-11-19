@@ -1,6 +1,7 @@
 package io.mosip.packet.extractor.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import io.mosip.commons.packet.dto.packet.PacketDto;
@@ -177,7 +178,7 @@ public class DataExtractionServiceImpl implements DataExtractionService {
     }
 
     @Override
-    public PacketCreatorResponse createPacketFromDataBase(DBImportRequest dbImportRequest) throws Exception {
+    public PacketCreatorResponse createPacketFromDataBase(DBImportRequest initialRequest) throws Exception {
         LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "DataExtractionServiceImpl :: createPacketFromDataBase():: entry");
         TIMECONSUPTIONQUEUE = new FixedListQueue<Long>(100);
         PacketCreatorResponse packetCreatorResponse = new PacketCreatorResponse();
@@ -186,6 +187,11 @@ public class DataExtractionServiceImpl implements DataExtractionService {
         TOTAL_RECORDS_FOR_PROCESS=0L;
 
         try {
+            commonUtil.updateNonIdSchemaNonTableFields(initialRequest);
+            JsonNode inputNode = mapper.valueToTree(initialRequest);
+            JsonNode upperCaseNode = commonUtil.toUpperExceptFieldToMap(inputNode);
+            DBImportRequest dbImportRequest = mapper.treeToValue(upperCaseNode, DBImportRequest.class);
+
             Date startTime = new Date();
             IS_PACKET_CREATOR_OPERATION = true;
             List<ValidatorEnum> enumList = new ArrayList<>();

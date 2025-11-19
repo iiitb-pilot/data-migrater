@@ -14,7 +14,7 @@
         "queryType": "TABLE",
         "executionOrderSequence": 1,
         "tableName": "idrepo.uin",
-        "nonIdSchemaFields": [
+        "nonIdSchemaTableFields": [
           "uin_ref_id",
           "uin_hash"
         ],
@@ -30,7 +30,7 @@
               "queryType": "TABLE",
               "executionOrderSequence": 2,
               "tableName": "idrepo.uin_biometric",
-              "nonIdSchemaFields": [
+              "nonIdSchemaTableFields": [
                 "uin_ref_id"
               ],
               "filters" : [

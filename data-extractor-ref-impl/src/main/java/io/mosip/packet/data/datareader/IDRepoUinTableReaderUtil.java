@@ -7,7 +7,9 @@ import com.google.gson.Gson;
 import io.mosip.kernel.core.exception.ExceptionUtils;
 import io.mosip.kernel.core.logger.spi.Logger;
 import io.mosip.packet.core.config.activity.Activity;
-import io.mosip.packet.core.constant.*;
+import io.mosip.packet.core.constant.FieldCategory;
+import io.mosip.packet.core.constant.GlobalConfig;
+import io.mosip.packet.core.constant.QuerySelection;
 import io.mosip.packet.core.constant.activity.ActivityName;
 import io.mosip.packet.core.constant.database.DBTypes;
 import io.mosip.packet.core.constant.database.QueryLimitSetter;
@@ -33,13 +35,13 @@ import java.sql.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static io.mosip.packet.core.constant.GlobalConfig.SESSION_KEY;
 import static io.mosip.packet.core.constant.GlobalConfig.*;
+import static io.mosip.packet.core.constant.GlobalConfig.SESSION_KEY;
 import static io.mosip.packet.core.constant.RegistrationConstants.*;
 
 @Component
-public class DataBaseUtil implements DataReader {
-    private static final Logger LOGGER = DataProcessLogger.getLogger(DataBaseUtil.class);
+public class IDRepoUinTableReaderUtil implements DataReader {
+    private static final Logger LOGGER = DataProcessLogger.getLogger(IDRepoUinTableReaderUtil.class);
     private Connection conn = null;
     private boolean isTrackerSameHost = false;
     private String trackColumn = null;
@@ -370,7 +372,7 @@ public class DataBaseUtil implements DataReader {
 
     @Override
     public void readData(DBImportRequest dbImportRequest, Map<FieldCategory, HashMap<String, Object>> dataHashMap, Map<String, HashMap<String, String>> fieldsCategoryMap, ResultSetter setter) throws Exception {
-        TOTAL_RECORDS_FOR_PROCESS = 0L;
+        TOTAL_RECORDS_FOR_PROCESS = 0l;
 
         try {
             if(conn != null) {
