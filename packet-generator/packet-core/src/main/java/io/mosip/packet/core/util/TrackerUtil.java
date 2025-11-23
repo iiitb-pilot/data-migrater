@@ -373,6 +373,32 @@ public class TrackerUtil {
         }
     }
 
+    public synchronized void updateDatabaseFilterParameters(ObjectNode objectNode) throws SQLException, InterruptedException {
+        if(IS_TRACKER_REQUIRED) {
+            PreparedStatement preparedStatement = null;
+            DBTypes dbType = Enum.valueOf(DBTypes.class, env.getProperty("spring.datasource.tracker.dbtype"));
+
+            try {
+                String query = TableQueries.getInsertQueries(OFFSET_TRACKER_TABLE_NAME, dbType);
+                Map<String, String> valueMap = new HashMap<>();
+                valueMap.put("TABLE_NAME", OFFSET_TRACKER_TABLE_NAME);
+                valueMap.put("SESSION_ID", SESSION_KEY);
+                valueMap.put("FILTER_PARM", objectNode.toString());
+                valueMap.put("VALUE", "0");
+                valueMap.put("IN_USE", "N");
+
+                while(isConnCreation)
+                    Thread.sleep(2000);
+
+                preparedStatement = conn.prepareStatement(queryFormatter.queryFormatter(query, valueMap));
+                preparedStatement.execute();
+            } finally {
+                if(preparedStatement != null)
+                    preparedStatement.close();
+            }
+        }
+    }
+
     @PreDestroy
     public void closeStatement() {
         if(IS_TRACKER_REQUIRED) {

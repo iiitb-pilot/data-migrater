@@ -131,7 +131,6 @@ public class BioDataCbeffUtil implements BioDocApiFactory {
             } else {
                 HashMap<String, Object> responseDto = (HashMap<String, Object>) responseWrapper.getResponse();
                 JsonNode jsonNode = (new ObjectMapper()).readTree(Base64.getDecoder().decode(responseDto.get("data").toString()));
-                System.out.println(jsonNode.asText());
                 populateData(null, jsonNode, map);
             }
 

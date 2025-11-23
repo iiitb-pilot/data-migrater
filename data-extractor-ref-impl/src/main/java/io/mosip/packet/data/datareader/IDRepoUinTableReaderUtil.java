@@ -371,7 +371,7 @@ public class IDRepoUinTableReaderUtil implements DataReader {
     }
 
     @Override
-    public void readData(DBImportRequest dbImportRequest, Map<FieldCategory, HashMap<String, Object>> dataHashMap, Map<String, HashMap<String, String>> fieldsCategoryMap, ResultSetter setter) throws Exception {
+    public void readData(DBImportRequest dbImportRequest, Map<String, HashMap<String, String>> fieldsCategoryMap, ResultSetter setter) throws Exception {
         TOTAL_RECORDS_FOR_PROCESS = 0l;
 
         try {
@@ -388,6 +388,7 @@ public class IDRepoUinTableReaderUtil implements DataReader {
                     public void run() {
                         PreparedStatement statement1 = null;
                         ResultSet scrollableResultSet = null;
+                        Map<FieldCategory, HashMap<String, Object>> dataHashMap = new HashMap<>();
                         try {
                             Float processPercentage = Float.valueOf((getPendingCountForProcess().floatValue() / Float.valueOf(dbReaderMaxThreadPoolCount * dbReaderMaxRecordsCountPerThreadPool)));
                             LOGGER.debug("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, " Database Reader Initial Condition for DB Read  ProcessPercentage, OFFSET_VALUE, OneTimeCheckForZeroOffset, CurrentPendingCount, PendingCountForProcess" +
@@ -464,7 +465,6 @@ public class IDRepoUinTableReaderUtil implements DataReader {
                                         baseDbThreadController.setProcessor(new ThreadDBProcessor() {
                                             @Override
                                             public void processData(ResultSetter setter, Map<String, Object> resultMap) throws Exception {
-                                                Map<FieldCategory, HashMap<String, Object>> dataHashMap = new HashMap<>();
                                                 populateDataFromResultSet(tableRequestDto, dbImportRequest.getColumnDetails(), resultMap, dataHashMap, fieldsCategoryMap, false);
 
                                                 if (!trackerUtil.isRecordPresent(dataHashMap.get(FieldCategory.DEMO).get(dbImportRequest.getTrackerInfo().getTrackerColumn()), GlobalConfig.getActivityName())) {

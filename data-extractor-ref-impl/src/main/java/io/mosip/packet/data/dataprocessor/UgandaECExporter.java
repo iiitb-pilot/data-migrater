@@ -5,7 +5,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.zaxxer.hikari.HikariDataSource;
 import io.mosip.kernel.core.logger.spi.Logger;
+import io.mosip.packet.core.config.activity.Activity;
+import io.mosip.packet.core.constant.GlobalConfig;
+import io.mosip.packet.core.constant.activity.ActivityName;
 import io.mosip.packet.core.constant.database.DBDriverType;
 import io.mosip.packet.core.constant.database.DBTypes;
 import io.mosip.packet.core.dto.DataPostProcessorResponseDto;
@@ -18,126 +22,197 @@ import io.mosip.packet.core.spi.datapostprocessor.DataPostProcessor;
 import io.mosip.packet.core.util.TrackerUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+import javax.sql.DataSource;
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 
 import static io.mosip.packet.core.constant.GlobalConfig.IS_RUNNING_AS_BATCH;
 import static io.mosip.packet.core.constant.GlobalConfig.PACKET_TRACKER_ADDITIONAL_FIELDS;
+import static io.mosip.packet.core.constant.RegistrationConstants.APPLICATION_ID;
+import static io.mosip.packet.core.constant.RegistrationConstants.APPLICATION_NAME;
 
 @Component
 public class UgandaECExporter implements DataPostProcessor {
     private static final Logger LOGGER = DataProcessLogger.getLogger(TrackerUtil.class);
-    private static Connection conn = null;
+    private DataSource dataSource;
 
     @Autowired
     private Environment env;
 
-    @Value("${mosip.extractor.uganda.ec.table.mapping:{}}")
-    private String tableMapping;
-
     @Autowired
     private ObjectMapper objectMapper;
 
-    private List<String> fieldsToStore;
+    @Value("${mosip.extractor.uganda.ec.table.mapping:{}}")
+    private String tableMapping;
+
+    private List<String> fieldsToStore = new ArrayList<>();
 
     public final String UG_TABLE_NAME = "UG_DATA_EXPORTER";
 
     private String preparedQuery;
 
+    private final Object lock = new Object();
+
+    private static final int BATCH_SIZE = 5;
+
+    private final ConcurrentLinkedQueue<Map<String,Object>> batchBuffer = new ConcurrentLinkedQueue<>();
+
+
     @Override
     public DataPostProcessorResponseDto postProcess(DataProcessorResponseDto processObject, ResultSetter setter, Long startTime) throws Exception {
-        intialize();
-        prepareQuery();
-        Map<String, Object> map = processObject.getResponses();
+        LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + processObject.getRefId() + " Time taken to get Connection From Database " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
+        Map<String, Object> record = processObject.getResponses();
+
+        synchronized (lock) {
+            LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + processObject.getRefId() + " Time taken to Enter the Lock Method " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
+            batchBuffer.add(record);
+            // If batch full → flush to DB
+            if (batchBuffer.size() >= BATCH_SIZE) {
+                flushBatch(processObject.getRefId(), startTime);
+            }
+        }
+        LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + processObject.getRefId() + " Time taken to Exist the Lock Method " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
 
         DataPostProcessorResponseDto responseDto = new DataPostProcessorResponseDto();
         responseDto.setProcess(processObject.getProcess());
         responseDto.setRefId(processObject.getRefId());
         responseDto.setTrackerRefId(processObject.getTrackerRefId());
-
-        PreparedStatement preparedStatement = conn.prepareStatement(preparedQuery);
-        for(int i=0; i < fieldsToStore.size(); i++) {
-            preparedStatement.setObject(i+1, map.get(fieldsToStore.get(i)));
-        }
-        preparedStatement.executeUpdate();
         return responseDto;
     }
 
-    private void prepareQuery() throws Exception {
-        if(preparedQuery == null) {
-            JsonNode jsonNode = objectMapper.readTree(tableMapping);
+    private void flushBatch(String ref_id, Long startTime) throws Exception {
+        List<Map<String, Object>> toFlush;
+        LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + ref_id + " Time taken to Enter the Flush Method " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
 
-            fieldsToStore = new ArrayList<>();
-            parseJsonNode(jsonNode);
-            StringBuilder query = new StringBuilder("INSERT INTO " + UG_TABLE_NAME + "( " + String.join(",", fieldsToStore) + ") VALUES(");
+        LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + ref_id + " Time taken to Enter the Flush Lock Method " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
+        if (batchBuffer.isEmpty()) return;
+        toFlush = new ArrayList<>(batchBuffer);
+        batchBuffer.clear();
 
-            for(int i=0; i < fieldsToStore.size(); i++) {
-                query.append("?");
+        LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + ref_id + " Time taken to Enter the Flush Lock Exist Method " + toFlush.size() + " - "  + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
 
-                if(i < fieldsToStore.size()-1)
-                    query.append(",");
-            }
-            query.append(")");
-            preparedQuery = query.toString();
-        }
-    }
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(preparedQuery)) {
+            conn.setAutoCommit(false);
+            LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + ref_id + " Time taken to getting Connection from Database " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
 
-    private void intialize() throws Exception {
-        if(conn == null) {
-            DBTypes dbType = Enum.valueOf(DBTypes.class, env.getProperty("spring.datasource.uganda.ec.dbtype"));
-
-            Class driverClass = Class.forName(dbType.getDriver());
-            DriverManager.registerDriver((Driver) driverClass.newInstance());
-            String driverFormat = env.getProperty("spring.datasource.uganda.ec.driver.format");
-            DBDriverType dbDriverType = DBDriverType.valueOf(driverFormat == null ? DBDriverType.DEFAULT.toString() : driverFormat);
-            String connectionHost = String.format(dbType.getDriverUrl(dbDriverType), env.getProperty("spring.datasource.uganda.ec.host"), env.getProperty("spring.datasource.uganda.ec.port"), env.getProperty("spring.datasource.uganda.ec.database"));
-            conn = DriverManager.getConnection(connectionHost, env.getProperty("spring.datasource.uganda.ec.username"), env.getProperty("spring.datasource.uganda.ec.password"));
-            conn.setAutoCommit(true);
-
-            Statement statement = null;
-            try {
-                statement = conn.createStatement();
-                statement.execute("SELECT 1 FROM " + UG_TABLE_NAME + " LIMIT 1");
-            } catch (Exception e) {
-                System.out.println("Table " + UG_TABLE_NAME +  " not Present in DB " + env.getProperty("spring.datasource.uganda.ec.host") + ExceptionUtils.getStackTrace(e));
-                throw new Exception("Table " + UG_TABLE_NAME +  " not Present in DB " + env.getProperty("spring.datasource.uganda.ec.host") + ExceptionUtils.getStackTrace(e));
-            } finally {
-                if(statement != null)
-                    statement.close();
-            }
-        }
-    }
-
-    private void parseJsonNode(JsonNode node) throws Exception {
-        String fieldName = null;
-        try {
-            // If object → loop fields
-            if (node.isObject()) {
-                ObjectNode obj = (ObjectNode) node;
-
-                Iterator<Map.Entry<String, JsonNode>> it = obj.fields();
-                while (it.hasNext()) {
-                    Map.Entry<String, JsonNode> entry = it.next();
-
-                    fieldName = entry.getKey();
-
-                    // recursive call for nested elements
-                    fieldsToStore.add(fieldName);
+            for (Map<String, Object> rec : toFlush) {
+                for (int i = 0; i < fieldsToStore.size(); i++) {
+                    ps.setObject(i + 1, rec.get(fieldsToStore.get(i)));
                 }
+                ps.addBatch();
             }
+            LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + ref_id + " Time taken to Map fields with PreparedStatement " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
 
-            if (node.isArray()) {
-                ArrayNode arr = (ArrayNode) node;
-                for (int i = 0; i < arr.size(); i++) {
-                    parseJsonNode(arr.get(i));
-                }
-            }
+            ps.executeBatch();
+            LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + ref_id + " Time taken to After Executing batch " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
+            conn.commit();
+            LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + ref_id + " Time taken to Exit the Flush Method " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
+
         } catch (Exception e) {
-            throw new Exception("Error Occured while extract Data for field " + fieldName + ExceptionUtils.getStackTrace(e));
+            // If batch failed, put records back in buffer
+            synchronized (lock) {
+                batchBuffer.addAll(toFlush);
+            }
+            throw e;
+        }
+    }
+
+    @PostConstruct
+    public void init() throws Exception {
+        try {
+            initializeDataSource();
+            prepareFields();
+            prepareQuery();
+            validateTableExists();
+        } catch (Exception e) {
+            LOGGER.error("INIT_FAILED", APPLICATION_NAME, APPLICATION_ID, "Failed to initialize UgandaECExporter: " + ExceptionUtils.getStackTrace(e));
+            throw e;
+        }
+
+    }
+
+    @PreDestroy
+    public void onShutdown() {
+        try {
+            flushBatch(null, System.nanoTime());
+        } catch (Exception e) {
+            LOGGER.error("Failed to flush batch on shutdown: {}", e.getMessage());
+        }
+    }
+
+
+    // -------------------------------------------------------------------------
+    // 1. CREATE DATASOURCE INSIDE SAME CLASS
+    // -------------------------------------------------------------------------
+    private void initializeDataSource() {
+        HikariDataSource ds = new HikariDataSource();
+        DBTypes dbType = Enum.valueOf(DBTypes.class, env.getProperty("spring.datasource.uganda.ec.dbtype"));
+        String driverFormat = env.getProperty("spring.datasource.uganda.ec.driver.format");
+        DBDriverType dbDriverType = DBDriverType.valueOf(driverFormat == null ? DBDriverType.DEFAULT.toString() : driverFormat);
+        String connectionHost = String.format(dbType.getDriverUrl(dbDriverType), env.getProperty("spring.datasource.uganda.ec.host"), env.getProperty("spring.datasource.uganda.ec.port"), env.getProperty("spring.datasource.uganda.ec.database"));
+
+        ds.setJdbcUrl(connectionHost);
+        ds.setUsername(env.getProperty("spring.datasource.uganda.ec.username"));
+        ds.setPassword(env.getProperty("spring.datasource.uganda.ec.password"));
+        ds.setDriverClassName(dbType.getDriver());
+
+        ds.setMaximumPoolSize(20);
+        ds.setMinimumIdle(5);
+        ds.setPoolName("UgandaECExporterPool");
+
+        this.dataSource = ds;
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. Parse fields from JSON mapping
+    // -------------------------------------------------------------------------
+    private void prepareFields() throws Exception {
+        JsonNode node = objectMapper.readTree(tableMapping);
+
+        fieldsToStore.clear();
+        Iterator<String> it = node.fieldNames();
+
+        while (it.hasNext()) {
+            fieldsToStore.add(it.next());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. Build INSERT query
+    // -------------------------------------------------------------------------
+    private void prepareQuery() {
+        StringJoiner cols = new StringJoiner(",");
+        StringJoiner vals = new StringJoiner(",");
+
+        fieldsToStore.forEach(f -> {
+            cols.add(f);
+            vals.add("?");
+        });
+
+        preparedQuery = "INSERT INTO " + UG_TABLE_NAME +
+                " (" + cols + ") VALUES (" + vals + ")";
+    }
+
+
+    // -------------------------------------------------------------------------
+    // 5. Validate table exists
+    // -------------------------------------------------------------------------
+    private void validateTableExists() throws Exception {
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT 1 FROM " + UG_TABLE_NAME + " LIMIT 1")) {
+            ps.executeQuery();
         }
     }
 }

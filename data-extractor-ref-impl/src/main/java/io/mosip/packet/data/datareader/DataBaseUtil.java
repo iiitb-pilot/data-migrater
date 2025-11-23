@@ -31,6 +31,7 @@ import org.springframework.stereotype.Component;
 
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static io.mosip.packet.core.constant.GlobalConfig.SESSION_KEY;
@@ -187,9 +188,8 @@ public class DataBaseUtil implements DataReader {
 
                     if(isOffsetFilterParamEnabled) {
                         if(queryFilter.getFromValue() == null || queryFilter.getFromValue().isEmpty()) {
-                            if(FILTER_PARM.hasNonNull(queryFilter.getFilterField())) {
-                                JsonNode valuesJson = FILTER_PARM.get(queryFilter.getFilterField());
-                                fromValue = valuesJson.get("fromValue").textValue();
+                            if(dataMap.get(FieldCategory.DYN).containsKey(queryFilter.getFilterField())) {
+                                fromValue = dataMap.get(FieldCategory.DYN).get(queryFilter.getFilterField()).toString();
                             } else {
                                 ObjectNode node = mapper.createObjectNode();
                                 FILTER_PARM.set(queryFilter.getFilterField(), node);
@@ -240,27 +240,30 @@ public class DataBaseUtil implements DataReader {
         } else if (tableRequestDto.getQueryType().equals(QuerySelection.SQL_QUERY)) {
             String sqlQuery = tableRequestDto.getSqlQuery().toUpperCase();
 
-            Set<String> listOfFields =  Arrays.stream(sqlQuery.substring(sqlQuery.toUpperCase().indexOf("SELECT") + 6, sqlQuery.toUpperCase().indexOf("FROM")).split(",")).map(s -> {return s.trim();}).collect(Collectors.toSet());
+            List<String> listOfFields =  splitSQLColumns(sqlQuery.substring(sqlQuery.toUpperCase().indexOf("SELECT") + 6, sqlQuery.toUpperCase().indexOf("FROM")));
             listOfFields.remove("*");
-            for(String column : fieldsCategoryMap.get(tableRequestDto.getTableName()).keySet()) {
+            for(String column : fieldsCategoryMap.get(tableRequestDto.getTableNameWithOutSchema()).keySet()) {
                 if(!listOfFields.contains(column.toUpperCase().split(" AS ")[0]))
                     listOfFields.add(column.toUpperCase());
             }
             String modifiedQuery = "SELECT " + StringUtils.join(listOfFields, ',') + " " + sqlQuery.substring(sqlQuery.toUpperCase().indexOf("FROM"));
 
-            modifiedQuery = "SELECT * FROM (" +  modifiedQuery + ")";
+            modifiedQuery = "SELECT * FROM (" +  modifiedQuery + ") modifiedQuery_";
             if(tableRequestDto.getExecutionOrderSequence() == 1) {
                 if(isOffsetFilterParamEnabled) {
-                    HashMap<String, String> valMap = new HashMap<>();
-                    FILTER_PARM.fields().forEachRemaining(stringJsonNodeEntry -> {
-                        String name = stringJsonNodeEntry.getKey();
-                        JsonNode valuesJson = stringJsonNodeEntry.getValue();
-                        String fromValue = valuesJson.get("fromValue").textValue();
-                        String toValue = valuesJson.get("toValue").textValue();
-                        valMap.put(name+"_fromValue", fromValue);
-                        valMap.put(name+"toValue", toValue);
-                    });
-                    dataMap.get(FieldCategory.DEMO).putAll(valMap);
+                    if(modifiedQuery.contains("${DYN:")) {
+                        int startIndex = modifiedQuery.indexOf("${DYN:", 0);
+                        int endIndex = modifiedQuery.indexOf("}", modifiedQuery.indexOf("${DYN:"));
+
+                        if (endIndex > 0) {
+                            String columnText = modifiedQuery.substring(startIndex+6, endIndex);
+
+                            if(!dataMap.get(FieldCategory.DYN).containsKey(columnText)) {
+                                ObjectNode node = mapper.createObjectNode();
+                                FILTER_PARM.set(columnText, node);
+                            }
+                        }
+                    }
                 }
 
                 if(!isOffsetFilterParamEnabled)
@@ -275,6 +278,26 @@ public class DataBaseUtil implements DataReader {
             return null;
     }
 
+    private List<String> splitSQLColumns(String selectPart) {
+        List<String> columns = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int level = 0; // parenthesis level
+
+        for (char c : selectPart.toCharArray()) {
+            if (c == '(') level++;
+            if (c == ')') level--;
+
+            if (c == ',' && level == 0) {
+                columns.add(current.toString().trim());
+                current.setLength(0);
+            } else {
+                current.append(c);
+            }
+        }
+        columns.add(current.toString().trim()); // add last column
+        return columns;
+    }
+
     public void closeConnection() {
         if (conn != null) {
             try {
@@ -287,7 +310,7 @@ public class DataBaseUtil implements DataReader {
     }
 
     public void populateDataFromResultSet(TableRequestDto tableRequestDto, List<FieldFormatRequest> columnDetails, Map<String, Object> resultData, Map<FieldCategory, HashMap<String, Object>> dataMap, Map<String, HashMap<String, String>> fieldsCategoryMap, Boolean localStoreRequired) throws Exception {
-        if (dataMap != null && dataMap.size() <= 0) {
+        if (dataMap != null && dataMap.size() <= 1) {
             dataMap.put(FieldCategory.DEMO, new HashMap<>());
             dataMap.put(FieldCategory.BIO, new HashMap<>());
             dataMap.put(FieldCategory.DOC, new HashMap<>());
@@ -369,7 +392,7 @@ public class DataBaseUtil implements DataReader {
     }
 
     @Override
-    public void readData(DBImportRequest dbImportRequest, Map<FieldCategory, HashMap<String, Object>> dataHashMap, Map<String, HashMap<String, String>> fieldsCategoryMap, ResultSetter setter) throws Exception {
+    public void readData(DBImportRequest dbImportRequest, Map<String, HashMap<String, String>> fieldsCategoryMap, ResultSetter setter) throws Exception {
         TOTAL_RECORDS_FOR_PROCESS = 0L;
 
         try {
@@ -384,6 +407,9 @@ public class DataBaseUtil implements DataReader {
                     @SneakyThrows
                     @Override
                     public void run() {
+                        Map<FieldCategory, HashMap<String, Object>> dataHashMap1 = new HashMap<>();
+                        dataHashMap1.put(FieldCategory.DYN, new HashMap<>());
+
                         PreparedStatement statement1 = null;
                         ResultSet scrollableResultSet = null;
                         try {
@@ -396,11 +422,20 @@ public class DataBaseUtil implements DataReader {
                                 if(IS_TRACKER_REQUIRED)
                                     trackerUtil.closeStatement();
 
-                                if(isOffsetFilterParamEnabled)
+                                if(isOffsetFilterParamEnabled) {
                                     FILTER_PARM = trackerUtil.getDatabaseFilterParameter();
-                                else
-                                    OFFSET_VALUE = trackerUtil.getDatabaseOffset();
 
+                                    FILTER_PARM.fields().forEachRemaining(entry -> {
+                                        String key = entry.getKey();
+                                        if (entry.getValue() != null) {
+                                            ObjectNode value = (ObjectNode) entry.getValue();
+                                            String val = value.get("fromValue").asText();
+                                            dataHashMap1.get(FieldCategory.DYN).put(key, val);
+                                        }
+                                    });
+                                } else {
+                                    OFFSET_VALUE = trackerUtil.getDatabaseOffset();
+                                }
 
                                 if(OFFSET_VALUE == null)
                                     OFFSET_VALUE = 0L;
@@ -408,7 +443,7 @@ public class DataBaseUtil implements DataReader {
                                 List<TableRequestDto> tableRequestDtoList = dbImportRequest.getTableDetails();
                                 Collections.sort(tableRequestDtoList);
                                 TableRequestDto tableRequestDto = tableRequestDtoList.get(0);
-                                statement1 = conn.prepareStatement(generateQuery(tableRequestDto, dataHashMap, fieldsCategoryMap), ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+                                statement1 = conn.prepareStatement(generateQuery(tableRequestDto, dataHashMap1, fieldsCategoryMap), ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
                                 scrollableResultSet = statement1.executeQuery();
 
                                 if(scrollableResultSet.last()) {
@@ -432,6 +467,7 @@ public class DataBaseUtil implements DataReader {
                                                 val = finalScrollableResultSet.getString(key);
                                                 if (val != null) {
                                                     ObjectNode value = (ObjectNode) entry.getValue();
+
                                                     value.put("fromValue", val);
                                                     obj.set(key, value);
                                                 }
@@ -439,6 +475,7 @@ public class DataBaseUtil implements DataReader {
                                                 LOGGER.error("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, " Error While update JSONNode for Filter Parameters for " + key + " Stack Trace : " + ExceptionUtils.getStackTrace(e));
                                             }
                                         });
+                                        trackerUtil.updateDatabaseFilterParameters(obj);
                                     }
                                 }
 
@@ -462,8 +499,10 @@ public class DataBaseUtil implements DataReader {
                                         baseDbThreadController.setProcessor(new ThreadDBProcessor() {
                                             @Override
                                             public void processData(ResultSetter setter, Map<String, Object> resultMap) throws Exception {
-                                                Map<FieldCategory, HashMap<String, Object>> dataHashMap = new HashMap<>();
+                                                LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread -  Entering Data Reader for Data ");
+                                                Map<FieldCategory, HashMap<String, Object>> dataHashMap = new HashMap<>(dataHashMap1);
                                                 populateDataFromResultSet(tableRequestDto, dbImportRequest.getColumnDetails(), resultMap, dataHashMap, fieldsCategoryMap, false);
+                                                LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread -  Completed Populate from DataMap");
 
                                                 if (!trackerUtil.isRecordPresent(dataHashMap.get(FieldCategory.DEMO).get(dbImportRequest.getTrackerInfo().getTrackerColumn()), GlobalConfig.getActivityName())) {
                                                     for (int i = 1; i < tableRequestDtoList.size(); i++) {
@@ -488,22 +527,23 @@ public class DataBaseUtil implements DataReader {
                                                                 statement2.close();
                                                         }
                                                     }
+                                                    LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread -  Existing DatabaseUtil");
                                                     setter.setResult(dataHashMap);
                                                 } else {
-                                                    LOGGER.debug("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, " Record Already Processed for ref_id" + dataHashMap.get(FieldCategory.DEMO).get(dbImportRequest.getTrackerInfo().getTrackerColumn()));
+                                                    LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, " Record Already Processed for ref_id" + dataHashMap.get(FieldCategory.DEMO).get(dbImportRequest.getTrackerInfo().getTrackerColumn()));
                                                 }
                                             }
                                         });
                                         threadPool.ExecuteTask(baseDbThreadController);
                                     } catch (Exception e) {
                                         threadPool.increaseFailedRecordCount();
-                                        LOGGER.error("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, " Error While Extracting Data " + (new Gson()).toJson(dataHashMap) + " Stack Trace : " + ExceptionUtils.getStackTrace(e));
+                                        LOGGER.error("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, " Error While Extracting Data " + (new Gson()).toJson(dataHashMap1) + " Stack Trace : " + ExceptionUtils.getStackTrace(e));
                                     }
                                 }
                                 oneTimeCheckForZeroOffset = false;
                             }
                         } catch (Exception e) {
-                            LOGGER.error("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, " Error While Extracting Data " + (new Gson()).toJson(dataHashMap) + " Stack Trace : " + ExceptionUtils.getStackTrace(e));
+                            LOGGER.error("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, " Error While Extracting Data " + (new Gson()).toJson(dataHashMap1) + " Stack Trace : " + ExceptionUtils.getStackTrace(e));
                             throw e;
                         } finally {
                             if(scrollableResultSet != null)

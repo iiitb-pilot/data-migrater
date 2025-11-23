@@ -232,6 +232,7 @@ public class DataExtractionServiceImpl implements DataExtractionService {
                 @SneakyThrows
                 @Override
                 public void setResult(Object obj) {
+                    LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - setResult Method");
                     Long startTime = System.nanoTime();
                     Map<FieldCategory, HashMap<String, Object>> dataHashMap = (Map<FieldCategory, HashMap<String, Object>>) obj;
                     TrackerRequestDto trackerRequestDto = new TrackerRequestDto();
@@ -244,11 +245,14 @@ public class DataExtractionServiceImpl implements DataExtractionService {
                     trackerRequestDto.setComments("Object Ready For Processing");
                     trackerUtil.addTrackerEntry(trackerRequestDto);
                     LOGGER.debug("SESSION_ID", "QUALITY_CHECK", "DataProcessor", "Request for Data Processor : " + trackerRequestDto.getRefId() + " : " + mapper.writeValueAsString(dataHashMap));
+                    LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + dataHashMap.get(FieldCategory.DEMO).get(dbImportRequest.getTrackerInfo().getTrackerColumn()) + " Time taken to complete Data Reader Method " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
                     DataProcessorResponseDto processObject = dataProcessorApiFactory.process(dbImportRequest, dataHashMap, setter);
+                    LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + processObject.getRefId() + " Time taken to complete Process Method " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
 
                     if(!IS_ONLY_FOR_QUALITY_CHECK) {
                         if(GlobalConfig.getApplicableProcessorConstantList().contains(ProcessorConstant.DATA_POST_PROCESSOR)) {
                             DataPostProcessorResponseDto postProcessorResponseDto = dataPostProcessorApiFactory.postProcess(processObject, setter, startTime);
+                            LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + processObject.getRefId() + " Time taken to complete Post Process Method " + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
                         }
                     } else {
                         ResultDto resultDto = new ResultDto();
@@ -261,7 +265,7 @@ public class DataExtractionServiceImpl implements DataExtractionService {
                     LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + processObject.getRefId()+ " Process Ended");
                     Long endTime = System.nanoTime();
                     Long timeDifference = endTime-startTime;
-                    LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + processObject.getRefId() + " Time taken to complete " + TimeUnit.MILLISECONDS.convert(timeDifference, TimeUnit.NANOSECONDS));
+                    LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + processObject.getRefId() + " Time taken to complete Overall Process" + TimeUnit.MILLISECONDS.convert(timeDifference, TimeUnit.NANOSECONDS));
                     TIMECONSUPTIONQUEUE.add(timeDifference);
                 }
             };
@@ -326,7 +330,7 @@ public class DataExtractionServiceImpl implements DataExtractionService {
             }
 
             if(!enableOnlyPacketUploader)
-                dataReaderApiFactory.readData(dbImportRequest, null, fieldsCategoryMap, DataProcessor);
+                dataReaderApiFactory.readData(dbImportRequest, fieldsCategoryMap, DataProcessor);
 
             do {
                 Thread.sleep(15000);

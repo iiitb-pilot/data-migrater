@@ -67,6 +67,9 @@ public class BioConversion implements BioConvertorApiFactory {
                     case "ISO":
                         convertTo = 0;
                         break;
+                    case "WSQ":
+                        convertToWSQ(inputImageType, byteData);
+                        break;
                     default:
                         convertTo = 1;
                         break;
@@ -83,6 +86,21 @@ public class BioConversion implements BioConvertorApiFactory {
         }
 
         return byteData;
+    }
+
+    private void convertToWSQ(Integer inputImageType, byte[] byteData) {
+/*            WsqDecoder decoder = new WsqDecoder();
+            Bitmap bitmap = decoder.decode(byteData);
+            int width = bitmap.getWidth();
+            int height = bitmap.getHeight();
+            byte[] data = bitmap.getPixels();
+            BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_GRAY);
+            WritableRaster raster = image.getRaster();
+            raster.setDataElements(0, 0, width, height, data);
+            ImageIO.write(image, toFormat.getFormat(), baos);
+
+            byteData = baos.toByteArray();
+            currentFormat = toFormat;*/
     }
 
     @Override

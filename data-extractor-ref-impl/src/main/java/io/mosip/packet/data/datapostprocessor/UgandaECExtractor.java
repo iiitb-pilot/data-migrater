@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static io.mosip.packet.core.constant.GlobalConfig.*;
 import static io.mosip.packet.core.constant.RegistrationConstants.APPLICATION_ID;
@@ -72,8 +73,10 @@ public class UgandaECExtractor implements DataProcessor {
             responseDto.setRefId(mapDetails.get(trackerColumn).toString());
             responseDto.setTrackerRefId(uinRefId);
             LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + uinRefId + " Process Started");
+            Long startTime = System.nanoTime();
 
             responseDto.setResponses(extractDataFromMap(objectMapper.readTree(tableMapping), mapDetails));
+            LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Thread - " + uinRefId + " Time taken to Complete extractDataFromMap" + TimeUnit.MILLISECONDS.convert(System.nanoTime()-startTime, TimeUnit.NANOSECONDS));
             return responseDto;
         }
 
@@ -95,9 +98,10 @@ public class UgandaECExtractor implements DataProcessor {
                     fieldName = entry.getKey();
                     JsonNode value = entry.getValue();
 
-                    if(map.get(value.asText()) instanceof BioData) {
-                        BioData data = (BioData) map.get(value.asText());
-                        response.put(fieldName, data.getBioData());
+                    Object objval = map.get(value.asText());
+                    if(objval instanceof BioData) {
+                        BioData data = (BioData) objval;
+                        response.put(fieldName, Base64.getEncoder().encode(data.getBioData()));
                     } else {
                         response.put(fieldName, map.get(value.asText()));
                     }
