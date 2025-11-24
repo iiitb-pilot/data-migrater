@@ -62,7 +62,8 @@ public class UgandaECExporter implements DataPostProcessor {
 
     private final Object lock = new Object();
 
-    private static final int BATCH_SIZE = 5;
+    @Value("${mosip.exporter.uganda.ec.insert.batch.size:5}")
+    private int BATCH_SIZE;
 
     private final ConcurrentLinkedQueue<Map<String,Object>> batchBuffer = new ConcurrentLinkedQueue<>();
 
