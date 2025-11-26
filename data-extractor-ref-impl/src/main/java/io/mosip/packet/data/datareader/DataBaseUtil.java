@@ -414,7 +414,7 @@ public class DataBaseUtil implements DataReader {
                         ResultSet scrollableResultSet = null;
                         try {
                             Float processPercentage = Float.valueOf((getPendingCountForProcess().floatValue() / Float.valueOf(dbReaderMaxThreadPoolCount * dbReaderMaxRecordsCountPerThreadPool)));
-                            LOGGER.debug("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, " Database Reader Initial Condition for DB Read  ProcessPercentage, OFFSET_VALUE, OneTimeCheckForZeroOffset, CurrentPendingCount, PendingCountForProcess" +
+                            LOGGER.debug("Database Reader Initial Condition for DB Read  ProcessPercentage : {}, OFFSET_VALUE : {}, OneTimeCheckForZeroOffset : {}, CurrentPendingCount : {}, PendingCountForProcess : {}" ,
                                     processPercentage, OFFSET_VALUE, oneTimeCheckForZeroOffset, threadPool.getCurrentPendingCount(), getPendingCountForProcess());
 
                             if ((processPercentage > 0.05 && processPercentage != 0) || (processPercentage == 0 && OFFSET_VALUE > 0 && oneTimeCheckForZeroOffset) || threadPool.getCurrentPendingCount() > 0) {
