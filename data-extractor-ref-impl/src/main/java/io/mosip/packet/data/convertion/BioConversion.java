@@ -128,7 +128,7 @@ public class BioConversion implements BioConvertorApiFactory {
                         srcImageType = toFormat;
                         break;
                     case ISO_TO_WEBP:
-                        byteData = imageConversion(ImageType.WEBP, 2, fieldName, byteData);
+                        byteData = imageConversion(ImageType.ISO, 2, fieldName, byteData);
                         byteData =  CommonUtil.convertImageToWEBPUsingOpenCV(byteData, 101);
                         srcImageType = toFormat;
                         break;
@@ -153,9 +153,16 @@ public class BioConversion implements BioConvertorApiFactory {
                         srcImageType = toFormat;
                         break;
                     case JPEG2000_TO_WSQ:
+                        byteData =  CommonUtil.convertBufferedImageToWSQUsingOpenCV(CommonUtil.convertImageToPNGUsingOpenCV(byteData, 0));
+                        srcImageType = toFormat;
+                        break;
                     case JPEG_TO_WSQ:
                     case PNG_TO_WSQ:
                     case ISO_TO_WSQ:
+                        byteData = imageConversion(ImageType.ISO, 2, fieldName, byteData);
+                        byteData =  CommonUtil.convertBufferedImageToWSQUsingOpenCV(CommonUtil.convertImageToPNGUsingOpenCV(byteData, 0));
+                        srcImageType = toFormat;
+                        break;
                     default:
                         throw new Exception("Implementation not found for the Format " + conversion);
                 }

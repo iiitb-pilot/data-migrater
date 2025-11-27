@@ -1,5 +1,6 @@
 package io.mosip.biometrics.util;
 
+import io.mosip.biometrics.util.wsq.encoder.WSQEncoder;
 import org.jnbis.api.model.Bitmap;
 import org.jnbis.internal.WsqDecoder;
 import org.opencv.core.CvType;
@@ -773,4 +774,14 @@ public class CommonUtil {
 		}
 		return null;
 	}
+
+    public static byte[] convertBufferedImageToWSQUsingOpenCV(byte[] bytes) throws IOException {
+		ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
+		BufferedImage image = ImageIO.read(bais);
+		byte[] pixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
+		io.mosip.biometrics.util.wsq.encoder.Bitmap bitmap = new io.mosip.biometrics.util.wsq.encoder.Bitmap(pixels, image.getWidth(), image.getHeight(), 300, 8, 1);
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		WSQEncoder.encode(baos, bitmap, 0, "converting BMP image to WSQ");
+		return baos.toByteArray();
+    }
 }
