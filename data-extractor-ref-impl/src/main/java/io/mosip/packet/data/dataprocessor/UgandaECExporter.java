@@ -58,11 +58,13 @@ public class UgandaECExporter implements DataPostProcessor {
     @Value("${mosip.exporter.uganda.ec.parallel.commit.size:5}")
     private int LIMIT_PARALLEL_COMMIT;
 
+    private int total_buffer_parallel_commit;
+
     private ExecutorService flushExecutor;
 
     private final ConcurrentLinkedQueue<Map<String, Object>> batchBuffer = new ConcurrentLinkedQueue<>();
 
-    private Thread backgroundFlusher = null;
+    private boolean isInsertLocked = false;
     // ----------------------
     // Main processing entry
     // ----------------------
@@ -74,20 +76,24 @@ public class UgandaECExporter implements DataPostProcessor {
 
         Map<String, Object> record = processObject.getResponses();
 
+        boolean isBufferFull = false;
         synchronized (lock) {
-            while(batchBuffer.size() > (BATCH_SIZE*3)) {
+            if(batchBuffer.size() > total_buffer_parallel_commit) {
                 LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID,
                         "Thread - " + processObject.getRefId() + " Batch Buffer is Greater than Tripple of Batch Size. Halting Record Addition");
-                long startTime1 = System.nanoTime();
-                lock.wait();
-                LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID,
-                        "Thread - " + processObject.getRefId() + " Releasing Lock." +  TimeUnit.MILLISECONDS.convert(System.nanoTime() - startTime1, TimeUnit.NANOSECONDS));
+                isBufferFull = true;
             }
 
-            LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID,
-                    "Thread - " + processObject.getRefId() + " Time taken to Enter the Lock Method " +
-                            TimeUnit.MILLISECONDS.convert(System.nanoTime() - startTime, TimeUnit.NANOSECONDS));
             batchBuffer.add(record);
+            LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID,
+                    "Thread - " + processObject.getRefId() + " Batch Buffer size " + batchBuffer.size());
+
+        }
+
+        if(isBufferFull && !isInsertLocked) {
+            isInsertLocked = true;
+            runFlushAsync(startTime);
+            isInsertLocked = false;
         }
 
         LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID,
@@ -104,65 +110,72 @@ public class UgandaECExporter implements DataPostProcessor {
     // ----------------------
     // Schedule flush task
     // ----------------------
-    private void runFlushAsync(String refId, Long startTime) {
-        Runnable task = () -> {
-            boolean permitAcquired = false;
-            try {
-                long acquireTime = System.nanoTime();
-                semaphore.acquire();
-                permitAcquired = true;
-                LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID,
-                        "Thread - " + refId + " Available Permits for semaphore is : " +
-                                semaphore.availablePermits() + " at " + TimeUnit.MILLISECONDS.convert(System.nanoTime() - acquireTime, TimeUnit.NANOSECONDS));
-                // perform a single batch flush (extracts exactly BATCH_SIZE records)
-                flushBatch(refId, startTime);
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                LOGGER.error("Flush task interrupted for refId {}: {}", refId, ie.getMessage());
-            } catch (Exception e) {
-                LOGGER.error("Error while flushing batch for refId {}: {}", refId, ExceptionUtils.getStackTrace(e));
-            } finally {
-                if (permitAcquired) {
-                    semaphore.release();
-                }
-            }
-        };
-
-        try {
-            flushExecutor.submit(task);
-        } catch (RejectedExecutionException rex) {
-            LOGGER.error("Flush task rejected; running synchronously for {}: {}", refId, rex.getMessage());
-            // fallback synchronously
-            task.run();
+    private void runFlushAsync(Long startTime) {
+        if (batchBuffer.size() < BATCH_SIZE) {
+            return;
         }
-    }
-
-    // ----------------------
-    // Extract exactly one batch (BATCH_SIZE) from queue
-    // ----------------------
-    private List<Map<String, Object>> extractBatch() {
+        List<Map<String, Object>> toFlush;
         synchronized (lock) {
-            if (batchBuffer.size() < BATCH_SIZE) {
-                return Collections.emptyList();
+            toFlush = new ArrayList<>(batchBuffer);
+            batchBuffer.clear();
+        }
+
+        if (toFlush.isEmpty()) {
+            LOGGER.debug("Nothing to flush");
+            return;
+        }
+
+        LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID,
+                " Flushing {} records. Elapsed {} ms",
+                toFlush.size(),
+                TimeUnit.MILLISECONDS.convert(System.nanoTime() - startTime, TimeUnit.NANOSECONDS));
+
+        int idx = 0;
+        while (idx < toFlush.size()) {
+            int end = Math.min(idx + BATCH_SIZE, toFlush.size());
+            List<Map<String, Object>> sub = toFlush.subList(idx, end);
+
+            Runnable task = () -> {
+                boolean permitAcquired = false;
+                try {
+                    long acquireTime = System.nanoTime();
+                    semaphore.acquire();
+                    permitAcquired = true;
+                    LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID,
+                            " Available Permits for semaphore is : " +
+                                    semaphore.availablePermits() + " at " + TimeUnit.MILLISECONDS.convert(System.nanoTime() - acquireTime, TimeUnit.NANOSECONDS));
+                    // perform a single batch flush (extracts exactly BATCH_SIZE records)
+                    flushBatch(sub, startTime);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    LOGGER.error("Flush task interrupted: {}", ie.getMessage());
+                } catch (Exception e) {
+                    LOGGER.error("Error while flushing batch: {}", ExceptionUtils.getStackTrace(e));
+                } finally {
+                    if (permitAcquired) {
+                        semaphore.release();
+                    }
+                }
+            };
+
+            try {
+                flushExecutor.submit(task);
+            } catch (RejectedExecutionException rex) {
+                LOGGER.error("Flush task rejected; running synchronously: {}", rex.getMessage());
+                // fallback synchronously
+                task.run();
             }
 
-            List<Map<String, Object>> batch = new ArrayList<>(BATCH_SIZE);
-
-            for (int i = 0; i < BATCH_SIZE; i++) {
-                Map<String, Object> rec = batchBuffer.poll();
-                if (rec != null) batch.add(rec);
-            }
-
-            return batch;
+            idx = end;
         }
     }
 
     // ----------------------
     // Perform DB insert for the extracted batch
     // ----------------------
-    private void flushBatch(List<Map<String,Object>> flushBatch) throws Exception {
+    private void flushBatch(List<Map<String, Object>> toFlush, Long startTime) throws Exception {
         LOGGER.info("SESSION_ID", APPLICATION_NAME, APPLICATION_ID,
-                 " Enter flushBatch");
+                " Enter flushBatch at " + TimeUnit.MILLISECONDS.convert(System.nanoTime() - startTime, TimeUnit.NANOSECONDS));
 
         if (preparedQuery == null || preparedQuery.isEmpty()) {
             LOGGER.error("Prepared query is empty; cannot execute flush.");
@@ -175,7 +188,7 @@ public class UgandaECExporter implements DataPostProcessor {
             conn.setAutoCommit(false);
 
             // Optionally chunk large batches; currently toFlush size == BATCH_SIZE usually
-            for (Map<String, Object> rec : flushBatch) {
+            for (Map<String, Object> rec : toFlush) {
                 for (int i = 0; i < fieldsToStore.size(); i++) {
                     ps.setObject(i + 1, rec.get(fieldsToStore.get(i)));
                 }
@@ -192,7 +205,7 @@ public class UgandaECExporter implements DataPostProcessor {
             // return records to buffer for retry
             synchronized (lock) {
                 // addAll preserves no specific order; consider DLQ or retry-count if repeated failures happen
-                batchBuffer.addAll(flushBatch);
+                batchBuffer.addAll(toFlush);
             }
             LOGGER.error("Flush failed " + ExceptionUtils.getStackTrace(e));
             throw e;
@@ -210,13 +223,17 @@ public class UgandaECExporter implements DataPostProcessor {
             prepareQuery();
             validateTableExists();
 
+            if (BATCH_SIZE <= 0) {
+                BATCH_SIZE = 5;
+            }
+
+
             if (LIMIT_PARALLEL_COMMIT <= 0) {
                 LIMIT_PARALLEL_COMMIT = 1;
             }
 
-            if (BATCH_SIZE <= 0) {
-                BATCH_SIZE = 5;
-            }
+            total_buffer_parallel_commit = Math.min(((LIMIT_PARALLEL_COMMIT*2)* BATCH_SIZE), 1000);
+
             semaphore = new Semaphore(LIMIT_PARALLEL_COMMIT);
 
             // fixed thread pool sized to parallel commit limit. Named threads help debugging.
@@ -225,58 +242,11 @@ public class UgandaECExporter implements DataPostProcessor {
                 t.setDaemon(true);
                 return t;
             });
-
-            // Background thread to monitor buffer
-            backgroundFlusher = new Thread(this::flushWorkerLoop);
-            backgroundFlusher.setDaemon(true); // doesn't block JVM shutdown
-            backgroundFlusher.start();
         } catch (Exception e) {
             LOGGER.error("INIT_FAILED", APPLICATION_NAME, APPLICATION_ID, "Failed to initialize UgandaECExporter: " + ExceptionUtils.getStackTrace(e));
             throw e;
         }
     }
-
-    private void flushWorkerLoop() {
-        try {
-            while (true) {
-                List<Map<String, Object>> batchToFlush = null;
-
-                if (batchBuffer.size() >= BATCH_SIZE) {
-                    batchToFlush = new ArrayList<>(BATCH_SIZE);
-                    for (int i = 0; i < BATCH_SIZE; i++) {
-                        Map<String, Object> rec = batchBuffer.poll();
-                        if (rec != null) batchToFlush.add(rec);
-                    }
-                }
-
-                if (batchToFlush != null && !batchToFlush.isEmpty()) {
-                    final List<Map<String,Object>> flushBatch1 = batchToFlush;
-                    flushExecutor.submit(() -> {
-                        try {
-                            semaphore.acquire();
-                            flushBatch(flushBatch1);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        } finally {
-                            semaphore.release();
-                        }
-                    });
-                }
-
-                while(batchBuffer.size() < (BATCH_SIZE*3)) {
-                     try {
-                         lock.notifyAll();
-                     } catch (IllegalMonitorStateException e) {};
-                }
-
-                // Sleep shortly to avoid busy waiting
-                Thread.sleep(100); // 50ms, adjust if needed
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
 
     /**
      * Shutdown procedure:
@@ -306,9 +276,6 @@ public class UgandaECExporter implements DataPostProcessor {
             LOGGER.warn("Interrupted while waiting for flushExecutor termination");
         }
 
-        if(backgroundFlusher.isAlive()) {
-            backgroundFlusher.interrupt();
-        }
         // Acquire all permits -> this blocks until all running flushes release their permits.
         try {
             semaphore.acquire(LIMIT_PARALLEL_COMMIT);
@@ -333,7 +300,7 @@ public class UgandaECExporter implements DataPostProcessor {
                         while (idx < remaining.size()) {
                             int end = Math.min(idx + BATCH_SIZE, remaining.size());
                             List<Map<String, Object>> sub = remaining.subList(idx, end);
-                            flushBatch(sub);
+                            flushBatch(sub, System.nanoTime());
                             idx = end;
                         }
                     } else {
