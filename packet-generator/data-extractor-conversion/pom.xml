@@ -5,7 +5,7 @@
     <parent>
         <artifactId>packet-generator</artifactId>
         <groupId>io.mosip.packet</groupId>
-        <version>1.2.0.1-SNAPSHOT</version>
+        <version>1.2.0.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
     <artifactId>data-extractor-conversion</artifactId>
@@ -49,19 +49,19 @@
         <dependency>
             <groupId>io.mosip.kernel</groupId>
             <artifactId>kernel-biometrics-api</artifactId>
-            <version>1.2.0.1-B1</version>
+            <version>1.2.0.1</version>
         </dependency>
         <!--  https://mvnrepository.com/artifact/io.mosip.commons/commons-packet-manager -->
          <dependency>
              <groupId>io.mosip.commons</groupId>
              <artifactId>commons-packet-manager</artifactId>
-             <version>1.2.0.1</version>
+             <version>1.2.0.2</version>
          </dependency>
         <!-- https://mvnrepository.com/artifact/io.mosip.kernel/kernel-core -->
         <dependency>
             <groupId>io.mosip.kernel</groupId>
             <artifactId>kernel-core</artifactId>
-            <version>1.2.0.1-B1</version>
+            <version>1.2.0.1</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/io.mosip.kernel/kernel-crypto-jce -->
         <dependency>
@@ -72,7 +72,7 @@
         <dependency>
             <groupId>io.mosip.kernel</groupId>
             <artifactId>kernel-dataaccess-hibernate</artifactId>
-            <version>1.2.0.1-B1</version>
+            <version>1.2.0.1</version>
         </dependency>
         <dependency>
             <groupId>org.apache.derby</groupId>
@@ -88,7 +88,7 @@
         <dependency>
             <groupId>io.mosip.kernel</groupId>
             <artifactId>kernel-idgenerator-rid</artifactId>
-            <version>1.2.0.1-B1</version>
+            <version>1.2.0.1</version>
             <exclusions>
                 <exclusion>
                     <groupId>io.mosip.kernel</groupId>
@@ -99,22 +99,22 @@
               <dependency>
                    <groupId>io.mosip.packet</groupId>
                    <artifactId>packet-creator</artifactId>
-                   <version>1.2.0.1-SNAPSHOT</version>
+                   <version>1.2.0.1</version>
                </dependency>
           <dependency>
              <groupId>io.mosip.packet</groupId>
              <artifactId>packet-uploader</artifactId>
-             <version>1.2.0.1-SNAPSHOT</version>
+             <version>1.2.0.1</version>
          </dependency>
         <dependency>
             <groupId>io.mosip.packet</groupId>
             <artifactId>packet-core</artifactId>
-            <version>1.2.0.1-SNAPSHOT</version>
+            <version>1.2.0.1</version>
         </dependency>
         <dependency>
             <groupId>io.mosip.packet</groupId>
             <artifactId>data-extractor-ref-impl</artifactId>
-            <version>1.2.0.1-SNAPSHOT</version>
+            <version>1.2.0.1</version>
         </dependency>
         <dependency>
             <groupId>io.mosip.commons</groupId>
@@ -187,7 +187,7 @@
                                   <resource>
                                       <directory>target</directory>
                                       <includes>
-                                          <include>data-extractor-conversion-1.2.0.1-SNAPSHOT.jar</include>
+                                          <include>data-extractor-conversion-1.2.0.1.jar</include>
                                       </includes>
                                       <filtering>true</filtering>
                                   </resource>
