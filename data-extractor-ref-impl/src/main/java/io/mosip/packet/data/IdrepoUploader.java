@@ -2,6 +2,7 @@ package io.mosip.packet.data;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
+import io.mosip.commons.packet.dto.Document;
 import io.mosip.commons.packet.dto.packet.PacketDto;
 import io.mosip.kernel.biometrics.entities.BIR;
 import io.mosip.kernel.biometrics.spi.CbeffUtil;
@@ -12,7 +13,6 @@ import io.mosip.packet.core.constant.tracker.TrackerStatus;
 import io.mosip.packet.core.dto.DataPostProcessorResponseDto;
 import io.mosip.packet.core.dto.DataProcessorResponseDto;
 import io.mosip.packet.core.dto.ResponseWrapper;
-import io.mosip.packet.core.dto.dbimport.DBImportRequest;
 import io.mosip.packet.core.logger.DataProcessLogger;
 import io.mosip.packet.core.service.thread.ResultDto;
 import io.mosip.packet.core.service.thread.ResultSetter;
@@ -22,8 +22,9 @@ import io.mosip.packet.data.dto.Documents;
 import io.mosip.packet.data.dto.IdRequestDto;
 import io.mosip.packet.data.dto.RequestDto;
 import io.mosip.packet.data.service.ImportIdentityService;
+import io.mosip.packet.data.util.ImportIdentityUtil;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.math.NumberUtils;
+import org.json.simple.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
@@ -61,7 +62,11 @@ public class IdrepoUploader implements DataPostProcessor {
     @Autowired
     private TrackerUtil trackerUtil;
 
+    @Autowired
+    private ImportIdentityUtil identityUtil;
+
     private byte[] xsd;
+
 
     @Override
     public DataPostProcessorResponseDto postProcess(DataProcessorResponseDto processObject, ResultSetter setter, Long startTime) throws Exception {
@@ -75,35 +80,16 @@ public class IdrepoUploader implements DataPostProcessor {
         HashMap<String, Object> demoDetails = (HashMap<String, Object>) processObject.getResponses().get("demoDetails");
         String trackerRefId = processObject.getTrackerRefId();
 
-        logger.info("Entering Idrepo identity Uploader, RID:{},NRCID:{} ", packetDto.getId(),
-                packetDto.getFields().get("nrcId"));
+        logger.info("Entering Idrepo identity Uploader, RID:{} ", packetDto.getId());
         Long timeDifference = System.nanoTime()-startTime;
         logger.debug("SESSION_ID", APPLICATION_NAME, APPLICATION_ID, "Time Taken to enter the id repo file. " + trackerRefId + " " + TimeUnit.MILLISECONDS.convert(timeDifference, TimeUnit.NANOSECONDS));
 
-        Map<String, Object> identity = new HashMap<>();
-        Map<String, String> packetFields = (Map<String, String>) packetDto.getFields();
-        for (Map.Entry<String, String> entry : packetFields.entrySet()) {
-            if (entry.getKey().equalsIgnoreCase("dateOfBirth")) {
-                //Date dob = simpleDateParser.parse(entry.getValue());
-                identity.put(entry.getKey(), entry.getValue().replaceAll("-","/"));
-            } else if (entry.getKey().equalsIgnoreCase("IDSchemaVersion")) {
-                identity.put(entry.getKey(), NumberUtils.createDouble(entry.getValue()));
-            } else if (entry.getKey().equalsIgnoreCase("phoneNumber")) {
-                identity.put(entry.getKey(), entry.getValue().replaceAll("[\\s+?�^]*", ""));
-            } else if (entry.getKey().equalsIgnoreCase("selectedHandles")
-            || entry.getKey().equalsIgnoreCase("nrcId")
-                    || entry.getKey().equalsIgnoreCase("UIN") || entry.getKey().equalsIgnoreCase("registrationId")) {
-                identity.put(entry.getKey(), entry.getValue());
-            } else {
-                identity.put(entry.getKey(), mapper.readValue(entry.getValue(), Object.class));
-            }
-        }
-
+        JSONObject demographicIdentity = identityUtil.loadDemographicIdentity(packetDto.getFields());
         IdRequestDto idRequestDTO = new IdRequestDto();
 // Setting the identity JSON object to the requestDto
         RequestDto requestDto = new RequestDto();
         requestDto.setRegistrationId(packetDto.getId());
-        requestDto.setIdentity(identity);
+        requestDto.setIdentity(demographicIdentity);
 
         //logger.info("Processor: RequestDto ( {} )", requestDto);
         requestDto.setDocuments(getBiometricsAndDocuments(packetDto));
@@ -149,10 +135,11 @@ public class IdrepoUploader implements DataPostProcessor {
                 logger.error("Error while creating cbeff file.", e);
             }
         }
-        if (packetDto.getDocuments() != null) {
-            if (packetDto.getFields().get("proofOfIdentity") != null) {
-                String encodedDocument = CryptoUtil.encodeToURLSafeBase64(packetDto.getDocuments().get("proofOfIdentity").getDocument());
-                documents.add(new Documents("proofOfIdentity", encodedDocument));
+        if (packetDto.getDocuments() != null && !packetDto.getDocuments().isEmpty()) {
+            for (Map.Entry entry : packetDto.getDocuments().entrySet()) {
+                Document doc = (Document) entry.getValue();
+                String encodedDocument = CryptoUtil.encodeToURLSafeBase64(doc.getDocument());
+                documents.add(new Documents(doc.getType(), encodedDocument));
             }
         }
         return documents;
